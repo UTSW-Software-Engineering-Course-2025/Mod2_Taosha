@@ -31,7 +31,7 @@ class GenerateImages(Callback):
         self.cmap = cmap
         self.n_generated_images = n_generated_images
         self.n_latent_dims = n_latent_dims
-        self.model = model
+        self._model = model
         
     def on_epoch_end(self, epoch, logs=None):
         """Overrides the on_epoch_end method of the superclass Callback. Here,
@@ -56,7 +56,7 @@ class GenerateImages(Callback):
                                         
         # Generate some synthetic images from random latent representations
         z_random = tf.random.normal((self.n_generated_images, self.n_latent_dims))
-        images_fake = self.model.generator(z_random)
+        images_fake = self._model.generator(z_random)
         
         # Create a figure with these generated images
         fig, ax = plt.subplots(1, self.n_generated_images, 
