@@ -538,19 +538,11 @@ class ConditionalGAN(GAN):
         images and an adversary to to discriminate between real and fake images.
 
         Args:
-            n_latent_dims (int, optional): Size of latent representation.
-                Defaults to 8. 
             n_classes (int, optional): Number of classes. Defaults to 10. 
-            image_shape (tuple, optional): Image shape. Defaults
-                to (32, 32, 1). 
             cond_loss_weight (float, optional): Weight of conditional loss for 
                 generator. Defaults to 1.
-            generator_lr (float, optional): Adam learning rate for generator. 
-                Defaults to 0.0001.
-            discriminator_lr (float, optional): Adam learning rate for discriminator. 
-                Defaults to 0.00001.
-            name (str, optional): Model name. Defaults to 'gan'.
-        """        
+            name (str, optional): Model name. Defaults to 'cgan'.
+        """          
         
         # ToImplement Exercise6a_part1 ==
         # ===============================
@@ -562,18 +554,22 @@ class ConditionalGAN(GAN):
         self.discriminator = MultiTaskDiscriminator(n_classes)
         
         # Categorical cross-entropy loss for discriminator classification
-        #==>  complete this line of code         
-
+        self.loss_class = tf.keras.losses.CategoricalCrossentropy(name='class_cce')
+        
         # Classification accuracy 
-        #==>  complete this line of code         
+        self.metric_class = tf.keras.metrics.TopKCategoricalAccuracy(k=1, name='top_1_acc')
      
         print(f"Loaded version: {__name__}")
-
 
     def call(self, inputs, training=None):
         # ToImplement Exercise6a_part2 ==
         # ===============================
-        #==>  complete this method , roughly 5 to 7 lines of code
+
+        _, classes = inputs
+        n_samples = tf.shape(classes)[0]
+        z_random = tf.random.normal((n_samples, self.n_latent_dims))
+        z_random_conditional = tf.concat([z_random, classes], axis=1)
+        images_fake = self.generator(z_random_conditional, training=training)
         
         return images_fake
         
@@ -595,93 +591,96 @@ class ConditionalGAN(GAN):
         class_random = tf.one_hot(class_random, depth=self.n_classes, dtype=tf.float32)
         return class_random
     
-    ##def train_step(self, data):
-        # """Defines a single training iteration, including the forward pass,
-        # computation of losses, backpropagation, and weight updates.
+    def train_step(self, data):
+        """Defines a single training iteration, including the forward pass,
+        computation of losses, backpropagation, and weight updates.
 
-        # Args:
-        #     data (tensor): Input images.
+        Args:
+            data (tensor): Input images.
 
-        # Returns:
-        #     dict: Loss values.
-        # """        
-        ##images_real, class_real = data[0]
+        Returns:
+            dict: Loss values.
+        """        
+        images_real, class_real = data[0]
 
         # ToImplement Exercise6a_part3 ==
         # ===============================        
-        #==>  complete this method, you can uncomment the ## lines above and below as hints
-
-
         # Step 1: Train the discriminator
 
         # Generate images from random latent vectors.
-
-
-
-
-
+        n_samples = tf.shape(images_real)[0]
+        z_random = tf.random.normal((n_samples, self.n_latent_dims))
+        class_random = self.generate_random_classes(n_samples)
+        z_random_conditional = tf.concat([z_random, class_random], axis=1)
+        images_fake = self.generator(z_random_conditional, training=False)
+        
         # Create label vectors, 1 for real and 0 for fake images
-
-
+        labels_real = tf.ones((n_samples, 1))
+        labels_fake = tf.zeros((n_samples, 1))
 
         # Concatenate real and fake images 
-
-
-
-        ##with tf.GradientTape() as gt:
+        images_disc = tf.concat([images_real, images_fake], axis=0)
+        labels_disc = tf.concat([labels_real, labels_fake], axis=0)
+       
+        with tf.GradientTape() as gt:
             # Predict with the discriminator
+            labels_pred, class_pred = self.discriminator(images_disc, training=True)
             
             # Compute discriminator loss for distinguishing real/fake images
-
+            disc_loss_adv = self.loss_bce(labels_disc, labels_pred)
             # Compute discriminator loss for predicting image class, for real images only
-
+            disc_loss_class = self.loss_class(class_real, class_pred[:n_samples, :])
             # Add losses
-
+            disc_loss = disc_loss_adv + disc_loss_class
             
             # Compute classification metric
-
+            self.metric_class.update_state(class_real, class_pred[:n_samples, :])
                                    
         # Compute the gradient of the lost wrt the discriminator weights
-
+        grads_disc = gt.gradient(disc_loss, self.discriminator.trainable_weights)
         
         # Apply the weight updates
-
+        self.optimizer_disc.apply_gradients(zip(grads_disc, self.discriminator.trainable_weights))           
         
         # Step 2: Train the generator
                     
-        ##with tf.GradientTape() as gt2:
+        with tf.GradientTape() as gt2:
             # Generate images from random latent vectors. Generate twice as many
             # images as the batch size so that the generator sees as many
             # samples as the discriminator did. 
-
-
-
-
+            z_random = tf.random.normal((n_samples * 2, self.n_latent_dims))
+            class_random = self.generate_random_classes(n_samples * 2)
+            z_random_conditional = tf.concat([z_random, class_random], axis=1)
+            images_fake = self.generator(z_random_conditional, training=False)
+                                    
             # Predict with the discriminator
-
+            labels_pred, class_pred = self.discriminator(images_fake, training=False)
             
             # We want to the discriminator to think these images are real, so we
             # calculate the loss between these predictions and the "real image"
             # labels
-
-
+            labels_gen = tf.ones((2 * n_samples, 1))
+            gen_loss_adv = self.loss_bce(labels_gen, labels_pred)
             # Compute loss between discriminator-predicted classes and the desired classes
-
+            class_random = tf.ensure_shape(class_random, [None, self.n_classes])
+            gen_loss_class = self.loss_class(class_random, class_pred)
             # Add losses
-
+            gen_loss = gen_loss_adv + self.cond_loss_weight * gen_loss_class
                         
         # Compute the gradient of the lost wrt the generator weights
-
+        grads_gen = gt2.gradient(gen_loss, self.generator.trainable_weights)
         
         # Apply the weight updates
-
+        self.optimizer_gen.apply_gradients(zip(grads_gen, self.generator.trainable_weights))                
         
         # Update the running means of the losses
+        self.loss_gen_tracker.update_state(gen_loss)
+        self.loss_disc_tracker.update_state(disc_loss)
         
         # Get the current values of these running means as a dict. These values
         # will be printed in the progress bar.
-
-        ## return dictLosses
+        dictLosses = {loss.name: loss.result() for loss in self.metrics}
+        return dictLosses
 
     def get_config(self):
         # To allow saving and loading of a custom model, we need to implement a

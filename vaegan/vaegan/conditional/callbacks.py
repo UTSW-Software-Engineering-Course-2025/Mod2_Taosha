@@ -35,7 +35,7 @@ class GenerateImagesConditional(Callback):
         self.cmap = cmap
         self.n_generated_images = n_generated_images
         self.n_latent_dims = n_latent_dims
-        self.model = model
+        self._model = model
         self.example_labels = example_labels
         self.n_classes = example_labels.shape[1]
         self.class_names = class_names
@@ -73,7 +73,7 @@ class GenerateImagesConditional(Callback):
                             
             z_random = tf.random.normal((self.n_generated_images, self.n_latent_dims))
             generator_inputs = tf.concat([z_random, labels], axis=-1)
-            images_fake = self.model.generator(generator_inputs)
+            images_fake = self._model.generator(generator_inputs)
         
             for i_img in range(self.n_generated_images):
                 ax[i_img, i_class].imshow(images_fake[i_img], cmap=self.cmap)              
