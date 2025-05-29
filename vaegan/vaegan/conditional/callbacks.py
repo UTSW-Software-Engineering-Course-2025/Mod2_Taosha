@@ -117,7 +117,7 @@ class SaveImagesConditional(Callback):
         self.n_classes = example_labels.shape[1]
         self.n_generated_images = n_generated_images
         self.n_latent_dims = n_latent_dims
-        self.model = model
+        self._model = model
         self.class_names = class_names
         
         self.images_tensor = tf.convert_to_tensor(self.example_images, dtype=tf.float32)
@@ -147,13 +147,13 @@ class SaveImagesConditional(Callback):
         # Compress images into probabilistic latent representations with
         # encoder. Note that calling the encoder model on a numpy array yields
         # outputs as tensor objects.
-        encoder_inputs = self.model.make_conditional_input(self.images_tensor, self.labels_tensor)  
-        z_mean, z_logvar = self.model.encoder(encoder_inputs)
+        encoder_inputs = self._model.make_conditional_input(self.images_tensor, self.labels_tensor)  
+        z_mean, z_logvar = self._model.encoder(encoder_inputs)
         # Sample points from these probabilistic latents
         z_real = sfn(z_mean, z_logvar)
         # Reconstruct images with decoder
         decoder_inputs = tf.concat([z_real, self.labels_tensor], axis=1)
-        recons = self.model.decoder(decoder_inputs)
+        recons = self._model.decoder(decoder_inputs)
         # Convert from tensors to numpy arrays
         recons = recons.numpy()
         n_recons = recons.shape[0]
@@ -190,7 +190,7 @@ class SaveImagesConditional(Callback):
                             
             z_random = tf.random.normal((self.n_generated_images, self.n_latent_dims))
             decoder_inputs = tf.concat([z_random, labels], axis=-1)
-            images_fake = self.model.decoder(decoder_inputs)
+            images_fake = self._model.decoder(decoder_inputs)
         
             for i_img in range(self.n_generated_images):
                 ax2[i_img, i_class].imshow(images_fake[i_img], cmap=cmap)              
